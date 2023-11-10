@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Define um método de saída que mostra uma mensagem e sai com código de erro.
+exit_on_error() {
+    echo "Erro: $1"
+    exit 1
+}
+
+# Função para verificar nslookup.
+check_nslookup() {
+    nslookup $1
+    if [ $? -ne 0 ]; then
+        exit_on_error "Falha no nslookup para $1"
+    else
+        echo "nslookup para $1 bem-sucedido."
+    fi
+}
+
+# Função para verificar telnet.
+check_telnet() {
+    (echo > /dev/tcp/$1/$2) >/dev/null 2>&1
+    if [ $? -ne 0 ]; then
+        exit_on_error "Falha no telnet para $1 na porta $2"
+    else
+        echo "Conexão telnet para $1 na porta $2 bem-sucedida."
+    fi
+}
+
+# Iniciando as validações
+echo "Iniciando validações e configurações..."
+
+# nslookup
+check_nslookup gewpppdm02
+check_nslookup gewpddve01
+
+# telnet
+check_telnet gewpppdm02 8443
+check_telnet gewpddve01 111
+check_telnet gewpddve01 2049
+
+# wget e instalação
+wget http://gewpsmgapp01.oil.galpenergia.corp/pub/fsagent1913_linux_x86_64.tar.gz || exit_on_error "Falha no download do fsagent1913_linux_x86_64.tar.gz"
+
+tar -xzf fsagent1913_linux_x86_64.tar.gz || exit_on_error "Falha ao descompactar fsagent1913_linux_x86_64.tar.gz"
+
+cd fsagent || exit_on_error "Falha ao mudar para o diretório fsagent"
+
+./install.sh --skip-driver --server=10.166.8.50 || exit_on_error "Falha na instalação do fsagent"
+
+# Verificação do status do serviço
+systemctl status agentsvc.service || exit_on_error "O serviço agentsvc.service não está rodando"
+
+# Configuração adicional
+/opt/dpsapps/agentsvc/configfw.sh || exit_on_error "Falha ao executar configfw.sh"
+
+# Informações de rede
+echo "Informações de rede:"
+ip a
+
+echo "Todas as etapas foram concluídas com sucesso."
